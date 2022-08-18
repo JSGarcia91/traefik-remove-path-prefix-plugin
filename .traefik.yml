@@ -1,0 +1,10 @@
+displayName: Remove path prefix request for Traefik
+type: middleware
+iconPath: .assets/icon.png
+
+import: git.grupocdv.com/jose/traefik-remove-path-prefix
+
+summary: 'Remove the prefix from the request path'
+
+testData:
+  removepathprefix:
