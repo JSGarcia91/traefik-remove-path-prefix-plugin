@@ -3,11 +3,11 @@ package traefik_remove_path_prefix_plugin
 import (
 	"context"
 	"net/http"
-	"net/url"
 	"strings"
 )
 
 type Config struct {
+	ForceSlash bool `ForceSlash:"rewrites,omitempty"`
 }
 
 // CreateConfig creates and initializes the plugin configuration.
@@ -15,30 +15,45 @@ func CreateConfig() *Config {
 	return &Config{}
 }
 
-// RemovePathPrefix a plugin.
-type RemovePathPrefix struct {
-	next http.Handler
-	name string
+// removePathPrefix is a middleware used to remove the prefix from an URL request.
+type removePathPrefix struct {
+	next       http.Handler
+	forceSlash bool
+	name       string
 }
 
-// New created a new plugin.
+// New created a new removePathPrefix plugin.
 func New(ctx context.Context, next http.Handler, config *Config, name string) (http.Handler, error) {
-	return &RemovePathPrefix{
-		name: name,
-		next: next,
+	return &removePathPrefix{
+		forceSlash: config.ForceSlash,
+		name:       name,
+		next:       next,
 	}, nil
 }
 
-func (e *RemovePathPrefix) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
+func (r *removePathPrefix) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	// Remove the first path argument of the URL.
 	var separator byte = '/'
-	var sanitazeUrl = strings.Trim(req.URL.Path, "/")
-	_, path := split(sanitazeUrl, separator, false)
+	var sanitazeUrl = strings.TrimPrefix(req.URL.Path, string(separator))
+	_, urlPath := split(sanitazeUrl, separator, false)
+
+	// Checks if the slash should be forced at the end of the path.
+	if r.forceSlash {
+		if urlPath == "" {
+			urlPath = "/"
+		} else {
+			urlPath = "/" + strings.TrimPrefix(urlPath, string(separator)) + "/"
+		}
+	}
 
 	// Change the URL original req for the URL without prefix.
-	req.URL = &url.URL{Path: path}
+	req.URL.Path = urlPath
+	if req.URL.RawPath != "" {
+		req.URL.RawPath = urlPath
+	}
+	req.RequestURI = req.URL.RequestURI()
 
-	e.next.ServeHTTP(rw, req)
+	r.next.ServeHTTP(rw, req)
 }
 
 // split slices s into two substrings separated by the first occurrence of
